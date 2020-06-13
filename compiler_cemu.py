@@ -8,8 +8,9 @@ from elf import ELF, round_up
 
 
 # Change the following
-GHS_PATH = 'D:/Greenhills/ghs/multi5327/'
-wiiurpxtool = 'D:/NSMBU RE/v1.3.0/code/wiiurpxtool.exe'
+GHS_PATH = 'C:/path/to/ghs/'
+PROJECT = 'Project'
+wiiurpxtool = 'C:/path/to/wiiurpxtool.exe'
 
 rpx = ''
 
@@ -57,7 +58,7 @@ buildAsRelocatable = False
 
 def printUsage():
     print('Usage:')
-    print('python compiler.py <project directory> <version> <rpx file>')
+    print('python compiler_cemu.py <version> <rpx file>')
 
 class Linker:
     def loadFile(self, filename):
@@ -121,7 +122,7 @@ class Module:
     def buildAsm(self, fn):
         print("Assembling '%s'" %fn)
         obj = os.path.basename(fn+'.o')
-        cmd = "%sasppc -I ../files/include %s -o objs/%s" %(GHS_PATH, fn, obj)
+        cmd = "%sasppc -I ../%s/include %s -o objs/%s" %(GHS_PATH, PROJECT, fn, obj)
         error = subprocess.call(cmd)
         if error:
             print('Build failed!!')
@@ -194,7 +195,7 @@ class Project:
             for fn in module.codefiles:
                 fileList += fn + '\n'
 
-        include = '../files/include'
+        include = '../%s/include' %(PROJECT)
         if self.include:
             include += '\n\t-I%s' %self.include
 
@@ -206,13 +207,13 @@ class Project:
             fileList.strip()
             )
 
-        with open('project.gpj', 'w') as f:
+        with open(PROJECT+'.gpj', 'w') as f:
             f.write(template)
 
     def buildGHS(self):
         print("*** Building '%s' ***\n" %self.name)
 
-        cmd = "%sgbuild -top project.gpj" %(GHS_PATH)
+        cmd = "%sgbuild -top %s.gpj" %(GHS_PATH, PROJECT)
         error = subprocess.call(cmd)
         if error:
             print('Build failed!!')
@@ -230,8 +231,8 @@ class Project:
         else:
             print("Linking '%s'" %self.name)
 
-        symtable = '../files/game_%s.x' %addrconv.region
-        addrconv.convertTable('../files/game.x', symtable)
+        symtable = '../%s/symbols_%s.x' %(PROJECT, addrconv.region)
+        addrconv.convertTable('../%s/symbols.x' %(PROJECT), symtable)
         
         out = self.name + '.o'
         symfiles = '-T %s' %symtable
@@ -239,7 +240,7 @@ class Project:
         textAddr = addrconv.symbols['textAddr']
         dataAddr = addrconv.symbols['dataAddr']
 
-        with open("project.ld", "w+") as symfile:
+        with open(PROJECT+".ld", "w+") as symfile:
             symfile.write(SymTableTemplate % (
                 hex(textAddr),
                 hex(0x10000000 - textAddr),
@@ -247,7 +248,7 @@ class Project:
                 hex(0xC0000000 - dataAddr),
             ))
 
-        symfiles += ' -T project.ld'
+        symfiles += ' -T %s.ld' %(PROJECT)
 
         syms = ''
         for sym, addr in addrconv.symbols.items():
@@ -272,7 +273,7 @@ def buildProject(proj):
     os.chdir(proj)
 
     global project
-    with open('project.yaml') as f:
+    with open(PROJECT+'.yaml') as f:
         project = Project(yaml.safe_load(f))
 
     project.build()
@@ -281,7 +282,7 @@ def buildProject(proj):
 def patchRpx(proj):
     print("Decompressing RPX...")
     elfName = '%s.elf' % os.path.splitext(rpx)[0]
-    rpxName = '%s_2.rpx' % os.path.splitext(rpx)[0]
+    rpxName = '%s_out.rpx' % os.path.splitext(rpx)[0]
 
     elfName2 = os.path.join(proj, '%s.o' % project.name)
 
@@ -510,17 +511,17 @@ def patchRpx(proj):
 
 def main():
     global linker, rpx, buildAsRelocatable
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         printUsage()
         return
 
-    addrconv.loadAddrFile(sys.argv[2])
+    addrconv.loadAddrFile(sys.argv[1])
 
     linker = Linker()
-    buildProject(sys.argv[1])
+    buildProject(PROJECT)
 
-    rpx = sys.argv[3]
-    patchRpx(sys.argv[1])
+    rpx = sys.argv[2]
+    patchRpx(PROJECT)
 
 if __name__ == '__main__':
     main()
