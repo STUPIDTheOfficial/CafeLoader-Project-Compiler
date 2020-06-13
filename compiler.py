@@ -8,7 +8,8 @@ from elf import ELF
 
 
 # Change the following
-GHS_PATH = 'D:/Greenhills/ghs/multi5327/'
+GHS_PATH = 'C:/path/to/ghs/'
+PROJECT = 'Project'
 
 
 TEMPLATE = """#!gbuild
@@ -50,7 +51,7 @@ SECTIONS
 
 def printUsage():
     print('Usage:')
-    print('python compiler.py <project> <version>')
+    print('python compiler.py <version>')
 
 class Linker:
     def loadFile(self, filename):
@@ -114,7 +115,7 @@ class Module:
     def buildAsm(self, fn):
         print("Assembling '%s'" %fn)
         obj = os.path.basename(fn+'.o')
-        cmd = "%sasppc -I ../files/include %s -o objs/%s" %(GHS_PATH, fn, obj)
+        cmd = "%sasppc -I ../%s/include %s -o objs/%s" %(GHS_PATH, PROJECT, fn, obj)
         error = subprocess.call(cmd)
         if error:
             print('Build failed!!')
@@ -213,7 +214,7 @@ class Project:
             for fn in module.codefiles:
                 fileList += fn + '\n'
 
-        include = '../files/include'
+        include = '../%s/include' %(PROJECT)
         if self.include:
             include += '\n\t-I%s' %self.include
 
@@ -225,13 +226,13 @@ class Project:
             fileList.strip()
             )
 
-        with open('project.gpj', 'w') as f:
+        with open(PROJECT+'.gpj', 'w') as f:
             f.write(template)
 
     def buildGHS(self):
         print("*** Building '%s' ***\n" %self.name)
 
-        cmd = "%sgbuild -top project.gpj" %(GHS_PATH)
+        cmd = "%sgbuild -top %s.gpj" %(GHS_PATH, PROJECT)
         error = subprocess.call(cmd)
         if error:
             print('Build failed!!')
@@ -245,8 +246,8 @@ class Project:
     def link(self):
         print("Linking '%s'" %self.name)
 
-        symtable = '../files/game_%s.x' %addrconv.region
-        addrconv.convertTable('../files/game.x', symtable)
+        symtable = '../%s/symbols_%s.x' %(PROJECT, addrconv.region)
+        addrconv.convertTable('../%s/symbols.x' %(PROJECT), symtable)
         
         out = self.name + '.o'
         symfiles = '-T %s' %symtable
@@ -254,7 +255,7 @@ class Project:
         textAddr = addrconv.symbols['textAddr']
         dataAddr = addrconv.symbols['dataAddr']
 
-        with open("project.ld", "w+") as symfile:
+        with open(PROJECT+".ld", "w+") as symfile:
             symfile.write(SymTableTemplate % (
                 hex(textAddr),
                 hex(0x10000000 - textAddr),
@@ -262,7 +263,7 @@ class Project:
                 hex(0xC0000000 - dataAddr),
             ))
 
-        symfiles += ' -T project.ld'
+        symfiles += ' -T %s.ld' %(PROJECT)
 
         syms = ''
         for sym, addr in addrconv.symbols.items():
@@ -318,31 +319,34 @@ class Project:
 
 def buildProject(proj):
     os.chdir(proj)
-    with open('project.yaml') as f:
+
+    with open(PROJECT+'.yaml') as f:
         project = Project(yaml.safe_load(f))
 
     project.build()
     os.chdir('..')
 
 def copyOutFiles():
-    if not os.path.isdir('OutProj'):
-        os.mkdir('OutProj')
+    if not os.path.isdir('Out'):
+        os.mkdir('Out')
 
-    shutil.copy(sys.argv[1]+'/Out/Addr.bin', 'OutProj/Addr.bin')
-    shutil.copy(sys.argv[1]+'/Out/Patches.hax', 'OutProj/Patches.hax')
-    shutil.copy(sys.argv[1]+'/Out/Code.bin', 'OutProj/Code.bin')
-    shutil.copy(sys.argv[1]+'/Out/Data.bin', 'OutProj/Data.bin')
+    shutil.copy(PROJECT+'/Out/Addr.bin', 'Out/Addr.bin')
+    shutil.copy(PROJECT+'/Out/Code.bin', 'Out/Code.bin')
+    shutil.copy(PROJECT+'/Out/Data.bin', 'Out/Data.bin')
+    shutil.copy(PROJECT+'/Out/Patches.hax', 'Out/Patches.hax')
+
+    shutil.rmtree(PROJECT+'/Out/')
 
 def main():
     global linker
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         printUsage()
         return
 
-    addrconv.loadAddrFile(sys.argv[2])
+    addrconv.loadAddrFile(sys.argv[1])
 
     linker = Linker()
-    buildProject(sys.argv[1])
+    buildProject(PROJECT)
 
     copyOutFiles()
 
